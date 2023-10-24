@@ -9,9 +9,10 @@ import io
 import base64
 from rembg import remove
 from PIL import Image
+import numpy as np
 
 
-def work_with_cam(local_dir: str = None):
+def work_with_cam():  # (local_dir: str = None):
     # SET THE COUNTDOWN TIMER for simplicity we set it to 3 We can also take this as input
     TIMER = int(5)
 
@@ -53,27 +54,29 @@ def work_with_cam(local_dir: str = None):
 
         unic_name = (''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
                      + datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S") + ".png")
-        if local_dir:
-            file_path = os.path.join(local_dir + unic_name)
-            os.chdir(local_dir)
-        else:
-            file_path = os.path.join(os.getcwd() + unic_name)
-        # height, width = img.shape[:2]
-        cv2.imwrite(unic_name, img)
+        # if local_dir:
+        #     file_path = os.path.join(local_dir + unic_name)
+        #     os.chdir(local_dir)
+        # else:
+        #     file_path = os.path.join(os.getcwd() + unic_name)
+        height, width = img.shape[:2]
+        # cv2.imwrite(unic_name, img)
         break
 
     # close the camera
     cap.release()
     # close all the opened windows
     cv2.destroyAllWindows()
-    return file_path  # , height, width
 
-def get_background_api(propmt, negative_prompt="",sampler_name="DPM++ 2M Karras", steps=20, cfg_scale=7,
+    return img, height, width
+
+
+def get_background_api(prompt, negative_prompt="",sampler_name="DPM++ 2M Karras", steps=20, cfg_scale=7,
                        denoising_strength =0, width=512, height=512):
     url = "http://127.0.0.1:7860"
 
     payload = {
-      "prompt": propmt,
+      "prompt": prompt,
       "negative_prompt": negative_prompt,
       "sampler_name": sampler_name,
       "steps": steps,
@@ -84,19 +87,18 @@ def get_background_api(propmt, negative_prompt="",sampler_name="DPM++ 2M Karras"
 
     }
     response = requests.post(url=f'{url}/sdapi/v1/txt2img', json=payload)
-
     r = response.json()
+    image = r['images'][0]
+    return image
 
-    image = Image.open(io.BytesIO(base64.b64decode(r['images'][0])))
-    image.save('output10.png')
 
 
-def refactor_person_with_background_api(propmt, img_like_str, negative_prompt="", sampler_name="DPM++ 2M Karras",
+def refactor_person_with_background_api(prompt, img_like_str, negative_prompt="", sampler_name="DPM++ 2M Karras",
                                         steps=20, cfg_scale=7, denoising_strength=0.4, width=512, height=512):
     url = "http://127.0.0.1:7860"
 
     payload = {
-        "prompt": propmt,
+        "prompt": prompt,
         "negative_prompt": negative_prompt,
         "init_images": [
                 img_like_str
@@ -112,29 +114,24 @@ def refactor_person_with_background_api(propmt, img_like_str, negative_prompt=""
 
     r = response.json()
 
+
     image = Image.open(io.BytesIO(base64.b64decode(r['images'][0])))
-    image.save('output10.png')
+    image.save('output1.png')
 
 
 
-def getting_person_without_background():
-    input_path = 'Y6R7QJLVBO23-10-2023_18-32-06.jpg'
-    output_path = 'pers7.png'
-    input = cv2.imread(input_path)
-    output = remove(input, alpha_matting_erode_size=5)
-    cv2.imwrite(output_path, output)
+def getting_person_without_background(cam_img):
+    output = remove(cam_img, alpha_matting_erode_size=5)
+    return output
 
 
-def superimposing_person_background():
+def superimposing_person_background(b64_background, array_person):
 
-    img1 = Image.open('output1.png')
-    # Opening the secondary image (overlay image)
-    img2 = Image.open('pers7.png')
-    # Pasting img2 image on top of img1
-    # starting at coordinates (0, 0)
+    img1 = Image.open(io.BytesIO(base64.b64decode(b64_background)))
+    img2 = Image.fromarray(array_person)
     img1.paste(img2, (0, 0), mask=img2)
     # Saving the image
-    img1.save('pers_ready3.png')
+    img1.save('pers_ready5.png')
 
 
 
@@ -147,6 +144,42 @@ prompt = ("goblin's face, made of ancient weathered rock, tall grass, moss, tree
 # print(my_image.shape)
 
 
+def full_work_with_photo(prompt: str, cfg_scale="7", denoising_strength="0.4"):
+    cfg_scale, denoising_strength = float(cfg_scale), float(denoising_strength)
+    cam_img, height_img, width_img = work_with_cam()
+    j_person = getting_person_without_background(cam_img)
+    img_b64_background = get_background_api(prompt=prompt, cfg_scale=cfg_scale, width=width_img, height=height_img)
+    superimposing_person_background(img_b64_background, j_person)
+
+# full_work_with_photo(prompt)
+# get_background_api(prompt)
+# getting_person_without_background()
+# get_background_api(prompt)
+
+# img = Image.open('pers2.png')
+# im_file = io.BytesIO()
+# img.save(im_file, format="PNG")
+# im_bytes = im_file.getvalue()  # im_bytes: image in binary format.
+# im_b64 = base64.b64encode(im_bytes)
+# print(im_b64)
+
+
+
+# im_arr = np.frombuffer(im_bytes, dtype=np.uint8)  # im_arr is one-dim Numpy array
+# img = cv2.imdecode(im_arr, flags=cv2.IMREAD_COLOR)
+
+# with open("output10.png", "rb") as f:
+#     # print(f.read())
+#     im_b64 = base64.b64encode(f.read())
+#     im_bytes = base64.b64decode(im_b64)
+#     print(im_bytes)
+
+
+
+
+
+
+
 
 # def load_input_image(path):
 #     with open(path, "rb") as file:
@@ -157,9 +190,9 @@ prompt = ("goblin's face, made of ancient weathered rock, tall grass, moss, tree
 # print(img)
 # print(type(img))
 # work_with_cam()
-img = cv2.imread('i1.png')
-print(img)
-print(type(img))
+# img = cv2.imread('i1.png')
+# print(img.shape[:2])
+
 
 # work_with_cam()
 
